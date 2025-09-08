@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Life Calendar – Interactive</title>
+<style>
+  :root{
+    --cell: 7px;
+    --gap: 1px;
+    --lived: #111;
+    --left: #fff;
+    --today: #3b82f6;
+    --grid-border: #e5e7eb;
+  }
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;margin:0;color:#111}
+  h1{margin:16px 0 6px;text-align:center;font-size:20px}
+  p.sub{margin:0 0 12px;text-align:center;color:#4b5563}
+
+  .table-container{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin:8px auto 16px;max-width:1400px;padding:0 10px}
+  .person{display:flex;flex-direction:column;align-items:center}
+  .person h3{margin:6px 0 8px;font-weight:600}
+
+  table{border-collapse:separate;border-spacing:var(--gap);table-layout:fixed;border:1px solid var(--grid-border);border-radius:10px;overflow:hidden;background:#fff}
+  tbody{display:block;max-height:70vh;overflow:auto}
+  tr{display:flex}
+  td{width:var(--cell);height:var(--cell);border:1px solid #e5e7eb;cursor:pointer}
+  td.lived{background:var(--lived)}
+  td.left{background:var(--left)}
+  td.today{outline:1px solid var(--today)}
+  td.has-note{box-shadow:inset 0 0 0 2px gold}
+
+  .legend{display:flex;gap:12px;justify-content:center;align-items:center;margin:6px 0 8px;font-size:12px;color:#374151}
+  .swatch{width:14px;height:14px;border:1px solid #d1d5db;border-radius:3px}
+  .swatch.lived{background:var(--lived)}
+  .swatch.left{background:var(--left)}
+  .swatch.today{background:var(--today)}
+  .swatch.note{background:gold}
+
+  /* Drawer */
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .2s}
+  .backdrop.show{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:-420px;width:420px;max-width:100%;height:100%;background:#fff;border-left:1px solid #e5e7eb;box-shadow:-8px 0 20px rgba(0,0,0,.15);transition:right .25s;display:flex;flex-direction:column}
+  .drawer.show{right:0}
+  .drawer header{padding:14px 16px;border-bottom:1px solid #e5e7eb}
+  .drawer header h4{margin:0 0 4px}
+  .drawer header .meta{color:#6b7280;font-size:12px}
+  .drawer .content{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+  textarea{width:100%;min-height:160px;resize:vertical;padding:10px;border:1px solid #d1d5db;border-radius:8px;font:inherit}
+  .row{display:flex;gap:8px;align-items:center}
+  .row label{font-size:14px;color:#374151}
+  input[type="text"], input[type="url"], input[type="number"], input[type="date"]{padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;width:100%}
+  .actions{margin-top:auto;padding:12px 16px;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:flex-end}
+  button{padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer}
+  button.primary{background:#111;color:#fff;border-color:#111}
+  button.danger{border-color:#dc2626;color:#dc2626}
+
+  .foot{margin:6px auto 16px;text-align:center;color:#6b7280;font-size:12px}
+</style>
+</head>
+<body>
+  <h1>Our Lives in Days</h1>
+  <p class="sub">Black squares = lived · white = remaining · blue outline = today · gold border = note saved</p>
+
+  <div class="legend">
+    <span class="swatch lived"></span> lived
+    <span class="swatch left"></span> remaining
+    <span class="swatch today"></span> today
+    <span class="swatch note"></span> note saved
+  </div>
+
+  <div class="table-container" id="tables"></div>
+
+  <!-- Controls -->
+  <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:10px 0 4px">
+    <button id="exportNotes" title="Download your saved notes as JSON" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer">Export notes</button>
+    <label style="font-size:14px;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;cursor:pointer">
+      Import notes JSON
+      <input id="importNotes" type="file" accept="application/json" style="display:none" />
+    </label>
+    <span style="font-size:12px;color:#6b7280;align-self:center">Spotify data is embedded; no import needed.</span>
+  </div>
+
+  <!-- Optional embedded Spotify JSON. Replace the [] below with your merged JSON content. -->
+  <script id="embeddedSpotify" type="application/json">[]</script>
+  <p class="foot">Grid shows 100 rows × 365 columns (leap days normalized). Scroll within each grid to view all years.</p>
+
+  <!-- Drawer UI -->
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="drawer" id="drawer">
+    <header>
+      <h4 id="cardTitle">Day details</h4>
+      <div class="meta" id="cardMeta"></div>
+    </header>
+    <div class="content">
+      <div class="row"><label>Title</label><input id="noteTitle" type="text" placeholder="e.g., Anniversary dinner" /></div>
+      <div class="row"><label>Link</label><input id="noteLink" type="url" placeholder="https://..." /></div>
+      <label>Notes</label>
+      <textarea id="noteBody" placeholder="Write anything you want to remember about this day..."></textarea>
+      <div id="spotifySection" style="display:none">
+        <h5 style="margin:10px 0 6px">Spotify plays (Me)</h5>
+        <div id="spotifyMeta" style="color:#6b7280;font-size:12px;margin-bottom:6px"></div>
+        <ul id="spotifyList" style="list-style:none;padding:0;margin:0;max-height:180px;overflow:auto"></ul>
+      </div>
+    </div>
+    <div class="actions"">
+      <button class="danger" id="deleteBtn" title="Delete saved note">Delete</button>
+      <span style="flex:1"></span>
+      <button id="cancelBtn">Close</button>
+      <button class="primary" id="saveBtn">Save</button>
+    </div>
+  </aside>
+
+<script>
+  // ===== Config: people and birthdays =====
+  const people = [
+    { key: 'me',   name: 'Me',   dob: new Date(1985, 7, 17) },      // 8/17/1985
+    { key: 'wife', name: 'Wife', dob: new Date(1989, 3, 22) },      // 4/22/1989
+    { key: 'son',  name: 'Son',  dob: new Date(2025, 8,  1) },      // 9/1/2025
+  ];
+
+  const oneDay = 24*60*60*1000;
+  const today  = new Date();
+  today.setHours(0,0,0,0);
+
+  const tablesContainer = document.getElementById('tables');
+
+  function keyFor(personKey, iso){ return `lifeNote:${personKey}:${iso}`; }
+  function loadNote(personKey, iso){ const s = localStorage.getItem(keyFor(personKey, iso)); return s ? JSON.parse(s) : null; }
+  function saveNote(personKey, iso, data){ localStorage.setItem(keyFor(personKey, iso), JSON.stringify(data)); }
+  function deleteNote(personKey, iso){ localStorage.removeItem(keyFor(personKey, iso)); }
+
+  function toISO(d){ const t = new Date(d.getTime()); t.setHours(0,0,0,0); return t.toISOString().slice(0,10); }
+
+  // Build one fixed 100×365 grid per person
+  function buildGrid(person){
+    const wrapper = document.createElement('div');
+    wrapper.className = 'person';
+
+    const label = document.createElement('h3');
+    label.textContent = person.name;
+    wrapper.appendChild(label);
+
+    const table = document.createElement('table');
+    const tbody = document.createElement('tbody');
+
+    let dayIndex = 0; // 0..(100*365-1)
+    for(let y=0; y<100; y++){
+      const tr = document.createElement('tr');
+      for(let d=0; d<365; d++){
+        const td = document.createElement('td');
+        const date = new Date(person.dob.getTime() + dayIndex*oneDay);
+        const iso  = toISO(date);
+
+        const lived = date <= today;
+        td.className = lived ? 'lived' : 'left';
+        if (toISO(today) === iso) td.classList.add('today');
+
+        // mark if note exists
+        if (loadNote(person.key, iso)) td.classList.add('has-note');
+
+        td.dataset.person = person.key;
+        td.dataset.date = iso;
+        td.title = `${person.name} · ${date.toDateString()}`;
+
+        td.addEventListener('click', onCellClick);
+
+        tr.appendChild(td);
+        dayIndex++;
+      }
+      tbody.appendChild(tr);
+    }
+
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+    return wrapper;
+  }
+
+  // Render all three
+  people.forEach(p => tablesContainer.appendChild(buildGrid(p)));
+
+  // ===== Drawer logic =====
+  const drawer   = document.getElementById('drawer');
+  const backdrop = document.getElementById('backdrop');
+  const cardTitle= document.getElementById('cardTitle');
+  const cardMeta = document.getElementById('cardMeta');
+  const noteTitle= document.getElementById('noteTitle');
+  const noteLink = document.getElementById('noteLink');
+  const noteBody = document.getElementById('noteBody');
+  const saveBtn  = document.getElementById('saveBtn');
+  const cancelBtn= document.getElementById('cancelBtn');
+  const deleteBtn= document.getElementById('deleteBtn');
+
+  let current = null; // { personKey, iso, cell }
+
+  function openDrawer(){ drawer.classList.add('show'); backdrop.classList.add('show'); }
+  function closeDrawer(){ drawer.classList.remove('show'); backdrop.classList.remove('show'); current=null; }
+
+  function onCellClick(e){
+    const cell = e.currentTarget;
+    const personKey = cell.dataset.person;
+    const iso = cell.dataset.date;
+
+    current = { personKey, iso, cell };
+
+    const person = people.find(p => p.key===personKey);
+    const date = new Date(iso);
+    cardTitle.textContent = `${person.name} — ${date.toDateString()}`;
+    const lived = date <= today ? 'lived day' : 'future day';
+    cardMeta.textContent = `${lived} • Click save to store notes for this date`;
+
+    const note = loadNote(personKey, iso) || {};
+    noteTitle.value = note.title || '';
+    noteLink.value  = note.link  || '';
+    noteBody.value  = note.body  || '';
+
+    openDrawer();
+  }
+
+  saveBtn.addEventListener('click', () => {
+    if(!current) return;
+    const data = { title: noteTitle.value.trim(), link: noteLink.value.trim(), body: noteBody.value.trim(), savedAt: new Date().toISOString() };
+    saveNote(current.personKey, current.iso, data);
+    current.cell.classList.add('has-note');
+    closeDrawer();
+  });
+  deleteBtn.addEventListener('click', () => {
+    if(!current) return;
+    deleteNote(current.personKey, current.iso);
+    current.cell.classList.remove('has-note');
+    closeDrawer();
+  });
+  cancelBtn.addEventListener('click', closeDrawer);
+  backdrop.addEventListener('click', closeDrawer);
+// ===== Spotify integration (embedded JSON) =====
+  const playsByDate = new Map(); // ISO date -> array of plays
+
+  function msToHMM(ms){
+    const s = Math.floor(ms/1000); const m = Math.floor(s/60); const h = Math.floor(m/60); const mm = m%60; return h?`${h}h ${mm}m`:`${mm}m`;
+  }
+  function pushPlay(iso, play){
+    if(!playsByDate.has(iso)) playsByDate.set(iso, []);
+    playsByDate.get(iso).push(play);
+  }
+  function loadEmbeddedSpotify(){
+    const el = document.getElementById('embeddedSpotify');
+    if(!el) return 0;
+    let count = 0;
+    try{
+      const arr = JSON.parse(el.textContent||'[]');
+      for(const row of arr){
+        if(row.spotify_track_uri && row.master_metadata_track_name){
+          const ts = new Date(row.ts);
+          const iso = toISO(ts);
+          pushPlay(iso, {
+            ts: row.ts,
+            track: row.master_metadata_track_name,
+            artist: row.master_metadata_album_artist_name || 'Unknown',
+            album: row.master_metadata_album_album_name || '',
+            ms: +row.ms_played || 0
+          });
+          count++;
+        }
+      }
+    }catch(e){ console.error('Embedded Spotify JSON parse error', e); }
+    return count;
+  }
+  const embeddedCount = loadEmbeddedSpotify();
+  if(embeddedCount){ console.log(`Loaded ${embeddedCount} Spotify plays from embedded JSON.`); }
+
+  // ===== Notes export/import =====
+  function exportNotesJSON(){
+    const keys = Object.keys(localStorage).filter(k=>k.startsWith('lifeNote:'));
+    const payload = {};
+    for(const k of keys){ payload[k] = JSON.parse(localStorage.getItem(k)); }
+    const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `life_calendar_notes_${new Date().toISOString().slice(0,10)}.json`; a.click();
+    URL.revokeObjectURL(url);
+  }
+  document.getElementById('exportNotes').addEventListener('click', exportNotesJSON);
+  document.getElementById('importNotes').addEventListener('change', async (e)=>{
+    const f = e.target.files?.[0]; if(!f) return;
+    try{
+      const txt = await readFileAsText(f);
+      const data = JSON.parse(txt);
+      for(const [k,v] of Object.entries(data)){
+        if(k.startsWith('lifeNote:')) localStorage.setItem(k, JSON.stringify(v));
+      }
+      alert('Notes imported. Reload the page to see gold markers on days with notes.');
+    }catch(err){ alert('Import failed. Ensure this is a notes JSON exported from this app.'); }
+  });
+
+  // Enhance drawer open to include Spotify list
+  const spotifySection = document.getElementById('spotifySection');
+  const spotifyMeta    = document.getElementById('spotifyMeta');
+  const spotifyList    = document.getElementById('spotifyList');
+
+  function renderSpotifyFor(iso){
+    const plays = playsByDate.get(iso) || [];
+    if(!plays.length){ spotifySection.style.display='none'; return; }
+    spotifySection.style.display='block';
+    const totalMs = plays.reduce((a,b)=>a+b.ms,0);
+    spotifyMeta.textContent = `${plays.length} play(s) • ${msToHMM(totalMs)} listened`;
+    spotifyList.innerHTML = '';
+    for(const p of plays.slice(0,50)){ // cap for performance
+      const li = document.createElement('li');
+      li.style.padding = '4px 0';
+      li.style.borderBottom = '1px solid #f3f4f6';
+      li.textContent = `${p.track} — ${p.artist}${p.album?` · ${p.album}`:''}`;
+      spotifyList.appendChild(li);
+    }
+    if(plays.length>50){
+      const li = document.createElement('li'); li.style.padding='6px 0'; li.style.fontSize='12px'; li.style.color='#6b7280';
+      li.textContent = `+ ${plays.length-50} more…`;
+      spotifyList.appendChild(li);
+    }
+  }
+
+  // Patch onCellClick to also render Spotify (Me account)
+  const __origOnCellClick = onCellClick;
+  onCellClick = function(e){
+    __origOnCellClick.call(this,e);
+    if(!current) return;
+    renderSpotifyFor(current.iso);
+  }
+</script>
+</body>
+</html>
