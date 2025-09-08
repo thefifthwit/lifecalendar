@@ -82,9 +82,38 @@
     <span style="font-size:12px;color:#6b7280;align-self:center">Spotify data is embedded; no import needed.</span>
   </div>
 
-  <!-- Optional embedded Spotify JSON. Replace the [] below with your merged JSON content. -->
-  <script id="embeddedSpotify" type="application/json">[]</script>
-  <p class="foot">Grid shows 100 rows × 365 columns (leap days normalized). Scroll within each grid to view all years.</p>
+  // Replace the embedded JSON loader with this:
+  const playsByDate = new Map();
+
+  function toISO(d){ const t = new Date(d.getTime()); t.setHours(0,0,0,0); return t.toISOString().slice(0,10); }
+  function pushPlay(iso, play) {
+    if (!playsByDate.has(iso)) playsByDate.set(iso, []);
+    playsByDate.get(iso).push(play);
+  }
+
+  async function loadSpotify() {
+    const res = await fetch('spotify.json');        // same folder as index.html
+    const arr = await res.json();
+    let count = 0;
+    for (const row of arr) {
+      if (row.spotify_track_uri && row.master_metadata_track_name) {
+        const ts = new Date(row.ts);
+        const iso = toISO(ts);
+        pushPlay(iso, {
+          ts: row.ts,
+          track: row.master_metadata_track_name,
+          artist: row.master_metadata_album_artist_name || 'Unknown',
+          album: row.master_metadata_album_album_name || '',
+          ms: +row.ms_played || 0
+        });
+        count++;
+      }
+    }
+    console.log(`Loaded ${count} Spotify plays`);
+  }
+
+  // Call this early in your boot sequence (before user clicks a day / opens drawer)
+  loadSpotify();
 
   <!-- Drawer UI -->
   <div class="backdrop" id="backdrop"></div>
