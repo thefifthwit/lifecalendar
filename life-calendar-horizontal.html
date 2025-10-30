@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Life Calendar</title>
+  <style>
+    :root{ --cell:7px; --gap:1px; --lived:#111; --left:#fff; --today:#3b82f6; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,sans-serif;background:#f9fafb;color:#111}
+    
+    header{background:#fff;border-bottom:1px solid #e5e7eb;padding:16px;text-align:center}
+    h1{font-size:20px;margin-bottom:4px}
+    .subtitle{font-size:13px;color:#6b7280}
+    
+    .controls{text-align:center;margin:12px 0}
+    .controls button{padding:8px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;margin:0 4px}
+    
+    .wrap{max-width:1400px;margin:0 auto;padding:16px}
+    .person-section{margin-bottom:20px}
+    .person-section h3{font-size:16px;margin-bottom:8px;text-align:center}
+    
+    table{border-collapse:separate;border-spacing:var(--gap);border:1px solid #e5e7eb;border-radius:8px;
+      background:#fff;margin:0 auto}
+    tbody{display:block;max-height:70vh;overflow:auto}
+    tr{display:flex}
+    td{width:var(--cell);height:var(--cell);border:1px solid #e5e7eb;cursor:pointer;position:relative}
+    td:hover{transform:scale(1.2);z-index:10}
+    td.lived{background:var(--lived)}
+    td.future{background:var(--left)}
+    td.today{outline:2px solid var(--today);outline-offset:1px}
+    td.has-note{box-shadow:inset 0 0 0 2px gold}
+    td.has-data::after{content:'';position:absolute;top:1px;right:1px;width:3px;height:3px;background:#10b981;border-radius:50%}
+    
+    /* Drawer */
+    .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .2s;z-index:100}
+    .backdrop.show{opacity:1;pointer-events:auto}
+    .drawer{position:fixed;top:0;right:-540px;width:540px;max-width:100%;height:100%;background:#fff;
+      box-shadow:-8px 0 24px rgba(0,0,0,.2);transition:right .25s;z-index:101;display:flex;flex-direction:column}
+    .drawer.show{right:0}
+    .drawer-header{padding:16px;border-bottom:1px solid #e5e7eb;background:#fafafa}
+    .drawer-header h4{font-size:16px;margin-bottom:4px}
+    .drawer-header .meta{font-size:12px;color:#6b7280}
+    .drawer-body{flex:1;overflow-y:auto;padding:16px}
+    
+    /* Data sections */
+    .section{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:12px;padding:16px;margin-bottom:16px;color:#fff}
+    .section h5{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px;font-weight:600;
+      border-bottom:2px solid rgba(255,255,255,0.3);padding-bottom:8px}
+    .section-meta{font-size:13px;color:rgba(255,255,255,0.9);margin-bottom:12px;font-weight:500}
+    
+    .location-item{display:flex;gap:8px;padding:8px 0;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.2);color:#fff}
+    .location-item:last-child{border:none}
+    .location-time{color:rgba(255,255,255,0.8);min-width:50px;font-size:12px;font-weight:600}
+    
+    .track-list{list-style:none}
+    .track-list li{padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.2);font-size:13px;color:#fff}
+    .track-list li:last-child{border:none}
+    .track-name{font-weight:600;margin-bottom:2px}
+    .track-artist{font-size:12px;color:rgba(255,255,255,0.8)}
+    
+    .plex-item{display:flex;gap:10px;padding:10px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);
+      border-radius:6px;margin-bottom:8px}
+    .plex-item:last-child{margin-bottom:0}
+    .plex-icon{width:44px;height:64px;background:rgba(255,255,255,0.2);border-radius:4px;display:flex;
+      align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+    .plex-title{font-weight:600;font-size:14px;margin-bottom:2px;color:#fff}
+    .plex-meta{font-size:11px;color:rgba(255,255,255,0.8)}
+    
+    .photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+    .photo-thumb{aspect-ratio:1;background:rgba(255,255,255,0.2);border-radius:6px;display:flex;
+      align-items:center;justify-content:center;font-size:28px;cursor:pointer;transition:transform .2s}
+    .photo-thumb:hover{transform:scale(1.05)}
+    
+    .chat-summary{background:rgba(255,255,255,0.15);padding:12px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);
+      font-size:13px;line-height:1.6;color:#fff}
+    .chat-topics{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+    .chat-topic{background:rgba(255,255,255,0.25);color:#fff;padding:4px 10px;border-radius:14px;font-size:11px;font-weight:600}
+    
+    .notes-section{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px}
+    .notes-section h5{font-size:14px;margin-bottom:10px;color:#111}
+    .notes-section label{display:block;font-size:12px;color:#374151;margin:10px 0 4px}
+    .notes-section input,.notes-section textarea{width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;
+      font:inherit;font-size:13px}
+    .notes-section textarea{min-height:90px;resize:vertical}
+    
+    .drawer-footer{padding:14px 16px;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:flex-end;background:#fafafa}
+    button{padding:8px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px}
+    button:hover{background:#f9fafb}
+    button.primary{background:#111;color:#fff;border-color:#111}
+    button.primary:hover{background:#000}
+    button.danger{color:#dc2626;border-color:#dc2626}
+    button.danger:hover{background:#fef2f2}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Our Lives in Days</h1>
+    <div class="subtitle">100 years × 365 days · Black = lived · White = future · Blue = today · Gold = notes · Green dot = data</div>
+  </header>
+
+  <div class="controls">
+    <button id="exportBtn">Export Notes</button>
+    <button id="importBtn">Import Notes</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none">
+  </div>
+
+  <div class="wrap" id="wrap"></div>
+
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-header">
+      <h4 id="drawerTitle">Day Details</h4>
+      <div class="meta" id="drawerMeta"></div>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+    <div class="drawer-footer">
+      <button class="danger" id="deleteBtn">Delete</button>
+      <span style="flex:1"></span>
+      <button id="closeBtn">Close</button>
+      <button class="primary" id="saveBtn">Save</button>
+    </div>
+  </aside>
+
+<script>
+const people = [
+  { key: 'me',   name: 'Me',   dob: new Date(1985, 7, 17) },
+  { key: 'wife', name: 'Wife', dob: new Date(1989, 3, 22) },
+  { key: 'son',  name: 'Son',  dob: new Date(2025, 8, 1) }
+];
+
+const today = new Date();
+today.setHours(0,0,0,0);
+const oneDay = 86400000;
+
+const mockData = {
+  location: new Map(),
+  spotify: new Map(),
+  plex: new Map(),
+  photos: new Map(),
+  chats: new Map()
+};
+
+// Generate mock data for last 120 days
+function generateMockData() {
+  for(let i = 0; i < 120; i++) {
+    const d = new Date(today.getTime() - i * oneDay);
+    const iso = toISO(d);
+    const rand = Math.random();
+    
+    if(rand > 0.25) {
+      mockData.location.set(iso, {
+        places: [
+          {time:'07:15',name:'Home'},{time:'08:30',name:'Coffee Shop'},{time:'09:00',name:'Office'},
+          {time:'12:30',name:'Lunch Spot'},{time:'13:15',name:'Office'},{time:'17:45',name:'Gym'},{time:'19:00',name:'Home'}
+        ],
+        distance: Math.floor(Math.random()*25)+8
+      });
+    }
+    
+    if(rand > 0.2) {
+      const tracks = ['Blinding Lights','Shape of You','Bohemian Rhapsody','Hotel California','Stairway to Heaven',
+        'Imagine','Wonderwall','Sweet Child O Mine','Mr. Brightside','Dreams'];
+      const artists = ['The Weeknd','Ed Sheeran','Queen','Eagles','Led Zeppelin','John Lennon','Oasis',
+        'Guns N Roses','The Killers','Fleetwood Mac'];
+      const count = Math.floor(Math.random()*40)+15;
+      const plays = [];
+      for(let t=0; t<count; t++) {
+        const idx = Math.floor(Math.random()*tracks.length);
+        plays.push({track: tracks[idx], artist: artists[idx], ms: Math.floor(Math.random()*240000)+180000});
+      }
+      mockData.spotify.set(iso, plays);
+    }
+    
+    if(rand > 0.75) {
+      const content = [
+        {title:'Inception',type:'Movie',runtime:148},{title:'The Dark Knight',type:'Movie',runtime:152},
+        {title:'Interstellar',type:'Movie',runtime:169},{title:'The Office S03E12',type:'TV',runtime:22},
+        {title:'Breaking Bad S04E13',type:'TV',runtime:48},{title:'Stranger Things S02E05',type:'TV',runtime:51}
+      ];
+      const items = [];
+      for(let x=0; x<Math.floor(Math.random()*3)+1; x++) {
+        items.push(content[Math.floor(Math.random()*content.length)]);
+      }
+      mockData.plex.set(iso, items);
+    }
+    
+    if(rand > 0.65) mockData.photos.set(iso, {count: Math.floor(Math.random()*25)+1});
+    
+    if(rand > 0.4) {
+      const summaries = [
+        {text:'Discussed weekend plans. Thinking about hiking at Sleeping Bear Dunes.',topics:['weekend','outdoors']},
+        {text:'Work meeting about Q4 goals. Need to wrap up project by November.',topics:['work','planning']},
+        {text:'Family chat organizing Thanksgiving. Mom asked about dietary restrictions.',topics:['family','holidays']},
+        {text:'Texted Mike about basketball game. Pistons vs Celtics tonight.',topics:['sports','friends']},
+        {text:'Planning date night. Considering new Italian place downtown.',topics:['date','food']}
+      ];
+      mockData.chats.set(iso, summaries[Math.floor(Math.random()*summaries.length)]);
+    }
+  }
+}
+
+generateMockData();
+
+function toISO(d) { return d.toISOString().slice(0,10); }
+function hasData(iso) { 
+  return mockData.location.has(iso) || mockData.spotify.has(iso) || mockData.plex.has(iso) || 
+         mockData.photos.has(iso) || mockData.chats.has(iso);
+}
+function msToTime(ms) {
+  const m = Math.floor(ms/60000);
+  const h = Math.floor(m/60);
+  return h > 0 ? `${h}h ${m%60}m` : `${m}m`;
+}
+
+function noteKey(person, iso) { return `note:${person}:${iso}`; }
+function getNote(person, iso) {
+  const s = localStorage.getItem(noteKey(person, iso));
+  return s ? JSON.parse(s) : null;
+}
+function setNote(person, iso, data) { localStorage.setItem(noteKey(person, iso), JSON.stringify(data)); }
+function delNote(person, iso) { localStorage.removeItem(noteKey(person, iso)); }
+
+function buildGrid(person) {
+  const section = document.createElement('div');
+  section.className = 'person-section';
+  
+  const h3 = document.createElement('h3');
+  h3.textContent = person.name;
+  section.appendChild(h3);
+  
+  const table = document.createElement('table');
+  const tbody = document.createElement('tbody');
+  
+  let dayIndex = 0;
+  for(let y=0; y<100; y++) {
+    const tr = document.createElement('tr');
+    for(let d=0; d<365; d++) {
+      const date = new Date(person.dob.getTime() + dayIndex*oneDay);
+      const iso = toISO(date);
+      
+      const td = document.createElement('td');
+      td.className = date <= today ? 'lived' : 'future';
+      if(toISO(today) === iso) td.classList.add('today');
+      if(getNote(person.key, iso)) td.classList.add('has-note');
+      if(hasData(iso) && person.key === 'me') td.classList.add('has-data');
+      
+      td.dataset.person = person.key;
+      td.dataset.date = iso;
+      td.title = `${person.name} · ${date.toDateString()}`;
+      td.addEventListener('click', () => openDay(person, date, td));
+      
+      tr.appendChild(td);
+      dayIndex++;
+    }
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  section.appendChild(table);
+  return section;
+}
+
+people.forEach(p => document.getElementById('wrap').appendChild(buildGrid(p)));
+
+let currentDay = null;
+
+function openDay(person, date, dayEl) {
+  currentDay = { person, date, iso: toISO(date), dayEl };
+  
+  document.getElementById('drawerTitle').textContent = `${person.name} — ${date.toDateString()}`;
+  const age = Math.floor((date - person.dob) / oneDay / 365.25);
+  const lived = date <= today ? `Lived · Age ${age}` : `Future · Age ${age}`;
+  document.getElementById('drawerMeta').textContent = lived;
+  
+  document.getElementById('drawerBody').innerHTML = renderSections(toISO(date), person.key);
+  
+  document.getElementById('drawer').classList.add('show');
+  document.getElementById('backdrop').classList.add('show');
+}
+
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('show');
+  document.getElementById('backdrop').classList.remove('show');
+  currentDay = null;
+}
+
+function renderSections(iso, personKey) {
+  let html = '';
+  if(personKey === 'me') {
+    html += renderLocation(iso);
+    html += renderSpotify(iso);
+    html += renderPlex(iso);
+    html += renderPhotos(iso);
+    html += renderChats(iso);
+  }
+  html += renderNotes(iso, personKey);
+  return html;
+}
+
+function renderLocation(iso) {
+  const loc = mockData.location.get(iso);
+  if(!loc) return '';
+  let h = '<div class="section"><h5>📍 Location</h5>';
+  h += `<div class="section-meta">${loc.places.length} locations · ${loc.distance} miles</div>`;
+  for(const p of loc.places) {
+    h += `<div class="location-item"><span class="location-time">${p.time}</span><span>${p.name}</span></div>`;
+  }
+  h += '</div>';
+  return h;
+}
+
+function renderSpotify(iso) {
+  const plays = mockData.spotify.get(iso);
+  if(!plays) return '';
+  const total = plays.reduce((a,b)=>a+b.ms,0);
+  let h = '<div class="section"><h5>🎵 Music</h5>';
+  h += `<div class="section-meta">${plays.length} plays · ${msToTime(total)} listened</div>`;
+  h += '<ul class="track-list">';
+  for(const t of plays.slice(0,12)) {
+    h += `<li><div class="track-name">${t.track}</div><div class="track-artist">${t.artist}</div></li>`;
+  }
+  if(plays.length > 12) h += `<li style="color:rgba(255,255,255,0.7);font-size:12px">+ ${plays.length-12} more</li>`;
+  h += '</ul></div>';
+  return h;
+}
+
+function renderPlex(iso) {
+  const items = mockData.plex.get(iso);
+  if(!items) return '';
+  const total = items.reduce((a,b)=>a+b.runtime,0);
+  let h = '<div class="section"><h5>🎬 Watched</h5>';
+  h += `<div class="section-meta">${items.length} items · ${Math.floor(total/60)}h ${total%60}m</div>`;
+  for(const item of items) {
+    const icon = item.type==='Movie'?'🎬':'📺';
+    h += `<div class="plex-item"><div class="plex-icon">${icon}</div><div><div class="plex-title">${item.title}</div>
+      <div class="plex-meta">${item.type} · ${item.runtime} min</div></div></div>`;
+  }
+  h += '</div>';
+  return h;
+}
+
+function renderPhotos(iso) {
+  const p = mockData.photos.get(iso);
+  if(!p) return '';
+  const emojis = ['🌅','🍕','🎉','🏔️','🌊','🌸','🐶','☕','🎂','🌆','🌴','🎨','🏖️','🌺','🦋','🌻','🎸','🍔','🏀','✈️'];
+  let h = '<div class="section"><h5>📸 Photos</h5>';
+  h += `<div class="section-meta">${p.count} photos</div><div class="photo-grid">`;
+  for(let i=0; i<Math.min(p.count,8); i++) {
+    h += `<div class="photo-thumb">${emojis[Math.floor(Math.random()*emojis.length)]}</div>`;
+  }
+  if(p.count > 8) h += `<div class="photo-thumb" style="background:#f3f4f6;color:#6b7280;font-size:14px">+${p.count-8}</div>`;
+  h += '</div></div>';
+  return h;
+}
+
+function renderChats(iso) {
+  const c = mockData.chats.get(iso);
+  if(!c) return '';
+  let h = '<div class="section"><h5>💬 Conversations</h5>';
+  h += `<div class="chat-summary">${c.text}</div>`;
+  if(c.topics) {
+    h += '<div class="chat-topics">';
+    for(const t of c.topics) h += `<span class="chat-topic">${t}</span>`;
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function renderNotes(iso, personKey) {
+  const note = getNote(personKey, iso) || {};
+  let h = '<div class="notes-section"><h5>✏️ Personal Notes</h5>';
+  h += '<label>Title</label><input type="text" id="noteTitle" value="'+(note.title||'')+'" placeholder="e.g., Anniversary">';
+  h += '<label>Link</label><input type="url" id="noteLink" value="'+(note.link||'')+'" placeholder="https://...">';
+  h += '<label>Notes</label><textarea id="noteBody" placeholder="Write anything...">'+(note.body||'')+'</textarea>';
+  h += '</div>';
+  return h;
+}
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  if(!currentDay) return;
+  const title = document.getElementById('noteTitle')?.value.trim() || '';
+  const link = document.getElementById('noteLink')?.value.trim() || '';
+  const body = document.getElementById('noteBody')?.value.trim() || '';
+  setNote(currentDay.person.key, currentDay.iso, {title, link, body, saved: new Date().toISOString()});
+  currentDay.dayEl.classList.add('has-note');
+  closeDrawer();
+});
+
+document.getElementById('deleteBtn').addEventListener('click', () => {
+  if(!currentDay) return;
+  delNote(currentDay.person.key, currentDay.iso);
+  currentDay.dayEl.classList.remove('has-note');
+  closeDrawer();
+});
+
+document.getElementById('closeBtn').addEventListener('click', closeDrawer);
+document.getElementById('backdrop').addEventListener('click', closeDrawer);
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const notes = {};
+  for(let i=0; i<localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if(k.startsWith('note:')) notes[k] = JSON.parse(localStorage.getItem(k));
+  }
+  const blob = new Blob([JSON.stringify(notes,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `notes-${toISO(today)}.json`;
+  a.click();
+});
+
+document.getElementById('importBtn').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const notes = JSON.parse(ev.target.result);
+      for(const [k,v] of Object.entries(notes)) localStorage.setItem(k, JSON.stringify(v));
+      alert('Imported! Refresh to see changes.');
+    } catch(err) {
+      alert('Import failed: '+err.message);
+    }
+  };
+  reader.readAsText(file);
+});
+</script>
+</body>
+</html>
