@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Life Calendar — Vertical</title>
+  <style>
+    :root{ --cell:12px; --gap:2px; --lived:#111; --left:#fff; --today:#3b82f6; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,sans-serif;background:#f9fafb;color:#111}
+    
+    header{background:#fff;border-bottom:1px solid #e5e7eb;padding:16px;text-align:center}
+    h1{font-size:20px;margin-bottom:4px}
+    .subtitle{font-size:13px;color:#6b7280}
+    
+    .container{max-width:1200px;margin:20px auto;padding:0 16px}
+    .columns{display:flex;gap:24px;justify-content:center}
+    
+    .person-col{display:flex;flex-direction:column;align-items:center}
+    .person-col h3{font-size:16px;margin-bottom:12px}
+    
+    .days-column{display:flex;flex-direction:column;gap:var(--gap);max-height:80vh;overflow-y:auto;
+      padding:8px;background:#fff;border:1px solid #e5e7eb;border-radius:8px}
+    
+    .day{width:var(--cell);height:var(--cell);cursor:pointer;border:1px solid #e5e7eb;position:relative;
+      transition:transform .1s}
+    .day:hover{transform:scale(1.15)}
+    .day.lived{background:var(--lived)}
+    .day.future{background:var(--left)}
+    .day.today{outline:2px solid var(--today);outline-offset:1px}
+    .day.has-note{box-shadow:inset 0 0 0 2px gold}
+    .day.has-data::after{content:'';position:absolute;top:1px;right:1px;width:3px;height:3px;
+      background:#10b981;border-radius:50%}
+    
+    /* Drawer */
+    .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;
+      transition:opacity .2s;z-index:100}
+    .backdrop.show{opacity:1;pointer-events:auto}
+    
+    .drawer{position:fixed;top:0;right:-540px;width:540px;max-width:100%;height:100%;background:#fff;
+      box-shadow:-8px 0 24px rgba(0,0,0,.2);transition:right .25s;z-index:101;display:flex;flex-direction:column}
+    .drawer.show{right:0}
+    
+    .drawer-header{padding:16px;border-bottom:1px solid #e5e7eb;background:#fafafa}
+    .drawer-header h4{font-size:16px;margin-bottom:4px}
+    .drawer-header .meta{font-size:12px;color:#6b7280}
+    
+    .drawer-body{flex:1;overflow-y:auto;padding:16px}
+    
+    .section{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:12px}
+    .section h5{font-size:14px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+    .section-meta{font-size:12px;color:#6b7280;margin-bottom:10px}
+    
+    /* Location */
+    .location-item{display:flex;gap:8px;padding:6px 0;font-size:13px;border-bottom:1px solid #e5e7eb}
+    .location-item:last-child{border:none}
+    .location-time{color:#6b7280;min-width:50px;font-size:11px}
+    .location-place{flex:1}
+    
+    /* Music */
+    .track-list{list-style:none}
+    .track-list li{padding:8px 0;border-bottom:1px solid #e5e7eb;font-size:13px}
+    .track-list li:last-child{border:none}
+    .track-name{font-weight:500;margin-bottom:2px}
+    .track-artist{font-size:12px;color:#6b7280}
+    
+    /* Plex */
+    .plex-item{display:flex;gap:10px;padding:10px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:8px}
+    .plex-item:last-child{margin-bottom:0}
+    .plex-icon{width:44px;height:64px;background:#e5e7eb;border-radius:4px;display:flex;
+      align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+    .plex-info{flex:1}
+    .plex-title{font-weight:500;font-size:13px;margin-bottom:2px}
+    .plex-meta{font-size:11px;color:#6b7280}
+    
+    /* Photos */
+    .photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+    .photo-thumb{aspect-ratio:1;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+      border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:28px;
+      cursor:pointer;transition:transform .2s}
+    .photo-thumb:hover{transform:scale(1.05)}
+    
+    /* Chat */
+    .chat-summary{background:#fff;padding:12px;border-radius:6px;border:1px solid #e5e7eb;
+      font-size:13px;line-height:1.6;color:#374151}
+    .chat-topics{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+    .chat-topic{background:#dbeafe;color:#1e40af;padding:4px 10px;border-radius:14px;font-size:11px}
+    
+    /* Notes */
+    .notes-section{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px}
+    .notes-section h5{font-size:14px;margin-bottom:10px}
+    .notes-section label{display:block;font-size:12px;color:#374151;margin:10px 0 4px}
+    .notes-section input,.notes-section textarea{width:100%;padding:8px;border:1px solid #d1d5db;
+      border-radius:6px;font:inherit;font-size:13px}
+    .notes-section textarea{min-height:90px;resize:vertical}
+    
+    .drawer-footer{padding:14px 16px;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:flex-end;
+      background:#fafafa}
+    button{padding:8px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;
+      cursor:pointer;font-size:13px;font-family:inherit}
+    button:hover{background:#f9fafb}
+    button.primary{background:#111;color:#fff;border-color:#111}
+    button.primary:hover{background:#000}
+    button.danger{color:#dc2626;border-color:#dc2626}
+    button.danger:hover{background:#fef2f2}
+    
+    .controls{text-align:center;margin:12px 0}
+    .controls button{margin:0 4px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Our Lives in Days</h1>
+    <div class="subtitle">Three lives, flowing downward · Black = lived · White = future · Blue = today · Gold = notes · Green dot = data</div>
+  </header>
+
+  <div class="controls">
+    <button id="exportBtn">Export Notes</button>
+    <button id="importBtn">Import Notes</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none">
+  </div>
+
+  <div class="container">
+    <div class="columns" id="columns"></div>
+  </div>
+
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-header">
+      <h4 id="drawerTitle">Day Details</h4>
+      <div class="meta" id="drawerMeta"></div>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+    <div class="drawer-footer">
+      <button class="danger" id="deleteBtn">Delete</button>
+      <span style="flex:1"></span>
+      <button id="closeBtn">Close</button>
+      <button class="primary" id="saveBtn">Save</button>
+    </div>
+  </aside>
+
+<script>
+// ===== Config =====
+const people = [
+  { key: 'me',   name: 'Me',   dob: new Date(1985, 7, 17) },
+  { key: 'wife', name: 'Wife', dob: new Date(1989, 3, 22) },
+  { key: 'son',  name: 'Son',  dob: new Date(2025, 8, 1) }
+];
+
+const today = new Date();
+today.setHours(0,0,0,0);
+const oneDay = 86400000;
+
+// ===== Mock Data =====
+const mockData = {
+  location: new Map(),
+  spotify: new Map(),
+  plex: new Map(),
+  photos: new Map(),
+  chats: new Map()
+};
+
+function generateMockData() {
+  const daysBack = 120;
+  for(let i = 0; i < daysBack; i++) {
+    const d = new Date(today.getTime() - i * oneDay);
+    const iso = toISO(d);
+    const rand = Math.random();
+    
+    // Location (75%)
+    if(rand > 0.25) {
+      mockData.location.set(iso, {
+        places: [
+          {time:'07:15',name:'Home'},
+          {time:'08:30',name:'Coffee Shop'},
+          {time:'09:00',name:'Office'},
+          {time:'12:30',name:'Lunch Spot'},
+          {time:'13:15',name:'Office'},
+          {time:'17:45',name:'Gym'},
+          {time:'19:00',name:'Home'}
+        ],
+        distance: Math.floor(Math.random()*25)+8
+      });
+    }
+    
+    // Spotify (80%)
+    if(rand > 0.2) {
+      const tracks = ['Blinding Lights','Shape of You','Bohemian Rhapsody','Hotel California',
+        'Stairway to Heaven','Imagine','Wonderwall','Sweet Child O Mine','Mr. Brightside','Dreams'];
+      const artists = ['The Weeknd','Ed Sheeran','Queen','Eagles','Led Zeppelin','John Lennon',
+        'Oasis','Guns N Roses','The Killers','Fleetwood Mac'];
+      const count = Math.floor(Math.random()*40)+15;
+      const plays = [];
+      for(let t=0; t<count; t++) {
+        const idx = Math.floor(Math.random()*tracks.length);
+        plays.push({
+          track: tracks[idx],
+          artist: artists[idx],
+          ms: Math.floor(Math.random()*240000)+180000
+        });
+      }
+      mockData.spotify.set(iso, plays);
+    }
+    
+    // Plex (25%)
+    if(rand > 0.75) {
+      const content = [
+        {title:'Inception',type:'Movie',runtime:148},
+        {title:'The Dark Knight',type:'Movie',runtime:152},
+        {title:'Interstellar',type:'Movie',runtime:169},
+        {title:'The Office S03E12',type:'TV',runtime:22},
+        {title:'Breaking Bad S04E13',type:'TV',runtime:48},
+        {title:'Stranger Things S02E05',type:'TV',runtime:51}
+      ];
+      const items = [];
+      const n = Math.floor(Math.random()*3)+1;
+      for(let x=0; x<n; x++) {
+        items.push(content[Math.floor(Math.random()*content.length)]);
+      }
+      mockData.plex.set(iso, items);
+    }
+    
+    // Photos (35%)
+    if(rand > 0.65) {
+      mockData.photos.set(iso, {count: Math.floor(Math.random()*25)+1});
+    }
+    
+    // Chats (60%)
+    if(rand > 0.4) {
+      const summaries = [
+        {text:'Discussed weekend plans. Thinking about hiking at Sleeping Bear Dunes.',topics:['weekend','outdoors','michigan']},
+        {text:'Work meeting about Q4 goals. Need to wrap up project by November.',topics:['work','planning']},
+        {text:'Family chat organizing Thanksgiving. Mom asked about dietary restrictions.',topics:['family','holidays']},
+        {text:'Texted Mike about basketball game. Pistons vs Celtics tonight.',topics:['sports','friends']},
+        {text:'Planning date night with spouse. Considering new Italian place downtown.',topics:['date','food','grand rapids']}
+      ];
+      mockData.chats.set(iso, summaries[Math.floor(Math.random()*summaries.length)]);
+    }
+  }
+}
+
+generateMockData();
+
+// ===== Utils =====
+function toISO(d) {
+  return d.toISOString().slice(0,10);
+}
+
+function hasData(iso) {
+  return mockData.location.has(iso) || mockData.spotify.has(iso) || 
+         mockData.plex.has(iso) || mockData.photos.has(iso) || mockData.chats.has(iso);
+}
+
+function msToTime(ms) {
+  const m = Math.floor(ms/60000);
+  const h = Math.floor(m/60);
+  return h > 0 ? `${h}h ${m%60}m` : `${m}m`;
+}
+
+// LocalStorage for notes
+function noteKey(person, iso) { return `note:${person}:${iso}`; }
+function getNote(person, iso) {
+  const s = localStorage.getItem(noteKey(person, iso));
+  return s ? JSON.parse(s) : null;
+}
+function setNote(person, iso, data) {
+  localStorage.setItem(noteKey(person, iso), JSON.stringify(data));
+}
+function delNote(person, iso) {
+  localStorage.removeItem(noteKey(person, iso));
+}
+
+// ===== Build Grid =====
+function buildColumn(person) {
+  const col = document.createElement('div');
+  col.className = 'person-col';
+  
+  const h3 = document.createElement('h3');
+  h3.textContent = person.name;
+  col.appendChild(h3);
+  
+  const days = document.createElement('div');
+  days.className = 'days-column';
+  
+  const yearsToShow = 100;
+  const totalDays = yearsToShow * 365;
+  
+  for(let i = 0; i < totalDays; i++) {
+    const date = new Date(person.dob.getTime() + i * oneDay);
+    const iso = toISO(date);
+    
+    const day = document.createElement('div');
+    day.className = 'day';
+    day.dataset.person = person.key;
+    day.dataset.date = iso;
+    day.title = `${person.name} · ${date.toDateString()}`;
+    
+    if(date <= today) day.classList.add('lived');
+    else day.classList.add('future');
+    
+    if(toISO(today) === iso) day.classList.add('today');
+    if(getNote(person.key, iso)) day.classList.add('has-note');
+    if(hasData(iso) && person.key === 'me') day.classList.add('has-data');
+    
+    day.addEventListener('click', () => openDay(person, date, day));
+    days.appendChild(day);
+  }
+  
+  col.appendChild(days);
+  return col;
+}
+
+people.forEach(p => {
+  document.getElementById('columns').appendChild(buildColumn(p));
+});
+
+// ===== Drawer =====
+let currentDay = null;
+
+function openDay(person, date, dayEl) {
+  currentDay = { person, date, iso: toISO(date), dayEl };
+  
+  document.getElementById('drawerTitle').textContent = `${person.name} — ${date.toDateString()}`;
+  const age = Math.floor((date - person.dob) / oneDay / 365.25);
+  const lived = date <= today ? `Lived · Age ${age}` : `Future · Age ${age}`;
+  document.getElementById('drawerMeta').textContent = lived;
+  
+  const body = document.getElementById('drawerBody');
+  body.innerHTML = renderSections(toISO(date), person.key);
+  
+  document.getElementById('drawer').classList.add('show');
+  document.getElementById('backdrop').classList.add('show');
+}
+
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('show');
+  document.getElementById('backdrop').classList.remove('show');
+  currentDay = null;
+}
+
+function renderSections(iso, personKey) {
+  let html = '';
+  
+  // Only show data for 'me'
+  if(personKey === 'me') {
+    html += renderLocation(iso);
+    html += renderSpotify(iso);
+    html += renderPlex(iso);
+    html += renderPhotos(iso);
+    html += renderChats(iso);
+  }
+  
+  html += renderNotes(iso, personKey);
+  return html;
+}
+
+function renderLocation(iso) {
+  const loc = mockData.location.get(iso);
+  if(!loc) return '';
+  
+  let h = '<div class="section"><h5>📍 Location</h5>';
+  h += `<div class="section-meta">${loc.places.length} locations · ${loc.distance} miles</div>`;
+  for(const p of loc.places) {
+    h += `<div class="location-item"><span class="location-time">${p.time}</span><span class="location-place">${p.name}</span></div>`;
+  }
+  h += '</div>';
+  return h;
+}
+
+function renderSpotify(iso) {
+  const plays = mockData.spotify.get(iso);
+  if(!plays) return '';
+  
+  const total = plays.reduce((a,b)=>a+b.ms,0);
+  const top = plays.slice(0,12);
+  
+  let h = '<div class="section"><h5>🎵 Music</h5>';
+  h += `<div class="section-meta">${plays.length} plays · ${msToTime(total)} listened</div>`;
+  h += '<ul class="track-list">';
+  for(const t of top) {
+    h += `<li><div class="track-name">${t.track}</div><div class="track-artist">${t.artist}</div></li>`;
+  }
+  if(plays.length > 12) h += `<li style="color:#6b7280;font-size:12px">+ ${plays.length-12} more</li>`;
+  h += '</ul></div>';
+  return h;
+}
+
+function renderPlex(iso) {
+  const items = mockData.plex.get(iso);
+  if(!items) return '';
+  
+  const total = items.reduce((a,b)=>a+b.runtime,0);
+  const hrs = Math.floor(total/60);
+  const mins = total % 60;
+  
+  let h = '<div class="section"><h5>🎬 Watched</h5>';
+  h += `<div class="section-meta">${items.length} items · ${hrs}h ${mins}m</div>`;
+  for(const item of items) {
+    const icon = item.type==='Movie'?'🎬':'📺';
+    h += `<div class="plex-item">
+      <div class="plex-icon">${icon}</div>
+      <div class="plex-info">
+        <div class="plex-title">${item.title}</div>
+        <div class="plex-meta">${item.type} · ${item.runtime} min</div>
+      </div>
+    </div>`;
+  }
+  h += '</div>';
+  return h;
+}
+
+function renderPhotos(iso) {
+  const p = mockData.photos.get(iso);
+  if(!p) return '';
+  
+  const emojis = ['🌅','🍕','🎉','🏔️','🌊','🌸','🐶','☕','🎂','🌆','🌴','🎨','🏖️','🌺','🦋','🌻','🎸','🍔','🏀','✈️'];
+  const show = Math.min(p.count, 8);
+  
+  let h = '<div class="section"><h5>📸 Photos</h5>';
+  h += `<div class="section-meta">${p.count} photos</div>`;
+  h += '<div class="photo-grid">';
+  for(let i=0; i<show; i++) {
+    h += `<div class="photo-thumb">${emojis[Math.floor(Math.random()*emojis.length)]}</div>`;
+  }
+  if(p.count > 8) {
+    h += `<div class="photo-thumb" style="background:#f3f4f6;color:#6b7280;font-size:14px">+${p.count-8}</div>`;
+  }
+  h += '</div></div>';
+  return h;
+}
+
+function renderChats(iso) {
+  const c = mockData.chats.get(iso);
+  if(!c) return '';
+  
+  let h = '<div class="section"><h5>💬 Conversations</h5>';
+  h += `<div class="chat-summary">${c.text}</div>`;
+  if(c.topics) {
+    h += '<div class="chat-topics">';
+    for(const t of c.topics) h += `<span class="chat-topic">${t}</span>`;
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function renderNotes(iso, personKey) {
+  const note = getNote(personKey, iso) || {};
+  
+  let h = '<div class="notes-section"><h5>✏️ Personal Notes</h5>';
+  h += '<label>Title</label>';
+  h += `<input type="text" id="noteTitle" value="${note.title||''}" placeholder="e.g., Anniversary">`;
+  h += '<label>Link</label>';
+  h += `<input type="url" id="noteLink" value="${note.link||''}" placeholder="https://...">`;
+  h += '<label>Notes</label>';
+  h += `<textarea id="noteBody" placeholder="Write anything...">${note.body||''}</textarea>`;
+  h += '</div>';
+  return h;
+}
+
+// ===== Events =====
+document.getElementById('saveBtn').addEventListener('click', () => {
+  if(!currentDay) return;
+  const title = document.getElementById('noteTitle')?.value.trim() || '';
+  const link = document.getElementById('noteLink')?.value.trim() || '';
+  const body = document.getElementById('noteBody')?.value.trim() || '';
+  
+  setNote(currentDay.person.key, currentDay.iso, {title, link, body, saved: new Date().toISOString()});
+  currentDay.dayEl.classList.add('has-note');
+  closeDrawer();
+});
+
+document.getElementById('deleteBtn').addEventListener('click', () => {
+  if(!currentDay) return;
+  delNote(currentDay.person.key, currentDay.iso);
+  currentDay.dayEl.classList.remove('has-note');
+  closeDrawer();
+});
+
+document.getElementById('closeBtn').addEventListener('click', closeDrawer);
+document.getElementById('backdrop').addEventListener('click', closeDrawer);
+
+// Export/Import
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const notes = {};
+  for(let i=0; i<localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if(k.startsWith('note:')) notes[k] = JSON.parse(localStorage.getItem(k));
+  }
+  const blob = new Blob([JSON.stringify(notes,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `notes-${toISO(today)}.json`;
+  a.click();
+});
+
+document.getElementById('importBtn').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const notes = JSON.parse(ev.target.result);
+      for(const [k,v] of Object.entries(notes)) {
+        localStorage.setItem(k, JSON.stringify(v));
+      }
+      alert('Notes imported! Refresh to see.');
+    } catch(err) {
+      alert('Import failed: '+err.message);
+    }
+  };
+  reader.readAsText(file);
+});
+</script>
+</body>
+</html>
