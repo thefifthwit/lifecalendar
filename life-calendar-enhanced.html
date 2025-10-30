@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Life Calendar — Enhanced</title>
+  <style>
+    :root{ --cell:7px; --gap:1px; --lived:#111; --left:#fff; --today:#3b82f6; --grid:#e5e7eb; }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;margin:0;color:#111;background:#f9fafb}
+    header{padding:18px 12px 8px;text-align:center;background:#fff;border-bottom:1px solid #e5e7eb}
+    h1{margin:0 0 6px;font-size:20px}
+    p.sub{margin:0;color:#4b5563;font-size:13px}
+    .legend{display:flex;gap:12px;justify-content:center;align-items:center;margin:6px 0 8px;font-size:12px;color:#374151}
+    .sw{width:14px;height:14px;border:1px solid #d1d5db;border-radius:3px}
+    .sw.lived{background:#111}.sw.left{background:#fff}.sw.today{background:#3b82f6}
+    .wrap{max-width:1400px;margin:0 auto;padding:0 10px 16px}
+    .tables{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:12px}
+    .person{display:flex;flex-direction:column;align-items:center}
+    .person h3{margin:6px 0 8px;font-size:16px}
+    table{border-collapse:separate;border-spacing:var(--gap);table-layout:fixed;border:1px solid var(--grid);border-radius:10px;background:#fff;overflow:hidden}
+    tbody{display:block;max-height:70vh;overflow:auto}
+    tr{display:flex}
+    td{width:var(--cell);height:var(--cell);border:1px solid #e5e7eb;cursor:pointer;position:relative}
+    td.lived{background:var(--lived)} td.left{background:var(--left)} td.today{outline:2px solid var(--today)}
+    td.has-note{box-shadow:inset 0 0 0 2px gold}
+    td.has-data::after{content:'';position:absolute;top:0;right:0;width:3px;height:3px;background:#10b981;border-radius:50%}
+    .controls{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:10px 0 6px}
+    .controls button,.controls label{padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer;font-size:14px}
+    
+    /* Drawer */
+    .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .2s;z-index:100}
+    .backdrop.show{opacity:1;pointer-events:auto}
+    .drawer{position:fixed;top:0;right:-520px;width:520px;max-width:100%;height:100%;background:#fff;border-left:1px solid #e5e7eb;box-shadow:-8px 0 20px rgba(0,0,0,.15);transition:right .25s;display:flex;flex-direction:column;z-index:101;overflow:hidden}
+    .drawer.show{right:0}
+    .drawer-header{padding:14px 16px;border-bottom:1px solid #e5e7eb;background:#fff;position:sticky;top:0;z-index:10}
+    .drawer-header h4{margin:0 0 4px;font-size:16px}
+    .drawer-header .meta{color:#6b7280;font-size:12px}
+    .drawer-content{padding:16px;flex:1;overflow-y:auto}
+    
+    /* Data sections */
+    .data-section{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:12px}
+    .data-section h5{margin:0 0 8px;font-size:14px;display:flex;align-items:center;gap:6px}
+    .data-section h5 .icon{font-size:16px}
+    .data-section.empty{display:none}
+    .data-meta{font-size:12px;color:#6b7280;margin-bottom:8px}
+    
+    /* Location */
+    .location-timeline{display:flex;flex-direction:column;gap:4px}
+    .location-item{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0}
+    .location-item .time{color:#6b7280;font-size:11px;min-width:45px}
+    .location-item .place{flex:1}
+    .location-item .arrow{color:#9ca3af}
+    .location-stats{display:flex;gap:12px;margin-top:8px;font-size:12px;color:#6b7280}
+    
+    /* Music */
+    .music-list{list-style:none;padding:0;margin:0;max-height:200px;overflow:auto}
+    .music-list li{padding:6px 0;border-bottom:1px solid #e5e7eb;font-size:13px}
+    .music-list li:last-child{border:none}
+    .music-list .track{font-weight:500}
+    .music-list .artist{color:#6b7280;font-size:12px}
+    
+    /* Plex */
+    .plex-list{display:flex;flex-direction:column;gap:8px}
+    .plex-item{display:flex;gap:10px;padding:8px;background:#fff;border-radius:6px;border:1px solid #e5e7eb}
+    .plex-poster{width:40px;height:60px;background:#e5e7eb;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px}
+    .plex-info{flex:1}
+    .plex-title{font-weight:500;font-size:13px;margin-bottom:2px}
+    .plex-detail{font-size:11px;color:#6b7280}
+    
+    /* Photos */
+    .photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+    .photo-thumb{aspect-ratio:1;background:#e5e7eb;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;transition:transform .2s}
+    .photo-thumb:hover{transform:scale(1.05)}
+    
+    /* Chats */
+    .chat-summary{background:#fff;padding:10px;border-radius:6px;border:1px solid #e5e7eb;font-size:13px;line-height:1.5;color:#374151}
+    .chat-topics{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .chat-topic{background:#dbeafe;color:#1e40af;padding:4px 8px;border-radius:12px;font-size:11px}
+    
+    /* Notes section */
+    .notes-section{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:12px}
+    .notes-section h5{margin:0 0 8px;font-size:14px}
+    .notes-section label{display:block;font-size:12px;color:#374151;margin-bottom:4px;margin-top:8px}
+    .notes-section input[type="text"],.notes-section input[type="url"],.notes-section textarea{
+      width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font:inherit;font-size:13px
+    }
+    .notes-section textarea{min-height:80px;resize:vertical}
+    
+    .drawer-actions{padding:12px 16px;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:flex-end;background:#fff}
+    button{padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer;font-size:13px}
+    button.primary{background:#111;color:#fff;border-color:#111}
+    button.danger{border-color:#dc2626;color:#dc2626}
+    .foot{margin:6px auto 16px;text-align:center;color:#6b7280;font-size:12px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Our Lives in Days</h1>
+    <p class="sub">Black = lived · white = remaining · blue outline = today · green dot = activity data · gold border = saved note</p>
+  </header>
+
+  <div class="legend">
+    <span class="sw lived"></span> lived
+    <span class="sw left"></span> remaining
+    <span class="sw today"></span> today
+  </div>
+
+  <div class="controls">
+    <button id="exportNotes" title="Download your saved notes as JSON">Export notes</button>
+    <label>Import notes <input id="importNotes" type="file" accept="application/json" style="display:none" /></label>
+  </div>
+
+  <div class="wrap">
+    <div class="tables" id="tables"></div>
+    <p class="foot">Each grid is 100 rows × 365 columns. Green dots indicate days with activity data. Click any day to view details.</p>
+  </div>
+
+  <!-- Drawer UI -->
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-header">
+      <h4 id="cardTitle">Day details</h4>
+      <div class="meta" id="cardMeta"></div>
+    </div>
+    <div class="drawer-content" id="drawerContent">
+      <!-- Dynamic content populated by JS -->
+    </div>
+    <div class="drawer-actions">
+      <button class="danger" id="deleteBtn" title="Delete saved note">Delete</button>
+      <span style="flex:1"></span>
+      <button id="cancelBtn">Close</button>
+      <button class="primary" id="saveBtn">Save Note</button>
+    </div>
+  </aside>
+
+<script>
+  // ===== People and birthdays =====
+  const people = [
+    { key: 'me',   name: 'Me',   dob: new Date(1985, 7, 17) },  // 8/17/1985
+    { key: 'wife', name: 'Wife', dob: new Date(1989, 3, 22) },  // 4/22/1989
+    { key: 'son',  name: 'Son',  dob: new Date(2025, 8,  1) },  // 9/1/2025
+  ];
+
+  const oneDay = 24*60*60*1000;
+  const today  = new Date(); today.setHours(0,0,0,0);
+  const tablesContainer = document.getElementById('tables');
+
+  function toISO(d){ const t = new Date(d.getTime()); t.setHours(0,0,0,0); return t.toISOString().slice(0,10); }
+  function keyFor(personKey, iso){ return `lifeNote:${personKey}:${iso}`; }
+  function loadNote(personKey, iso){ const s = localStorage.getItem(keyFor(personKey, iso)); return s ? JSON.parse(s) : null; }
+  function saveNote(personKey, iso, data){ localStorage.setItem(keyFor(personKey, iso), JSON.stringify(data)); }
+  function deleteNoteLS(personKey, iso){ localStorage.removeItem(keyFor(personKey, iso)); }
+
+  // ===== Mock data structures =====
+  const dataByDate = {
+    spotify: new Map(),
+    location: new Map(),
+    plex: new Map(),
+    photos: new Map(),
+    chats: new Map()
+  };
+
+  // Generate mock data for recent dates
+  function generateMockData() {
+    const recent = new Date(today);
+    recent.setDate(recent.getDate() - 90); // Last 90 days
+    
+    for(let i = 0; i < 90; i++) {
+      const date = new Date(recent.getTime() + i * oneDay);
+      const iso = toISO(date);
+      const rand = Math.random();
+      
+      // Spotify data (70% of days)
+      if(rand > 0.3) {
+        const tracks = Math.floor(Math.random() * 50) + 10;
+        const plays = [];
+        for(let t = 0; t < tracks; t++) {
+          plays.push({
+            track: ['Blinding Lights', 'Shape of You', 'Bohemian Rhapsody', 'Stairway to Heaven', 'Hotel California', 'Imagine', 'Wonderwall', 'Sweet Child O Mine'][Math.floor(Math.random()*8)],
+            artist: ['The Weeknd', 'Ed Sheeran', 'Queen', 'Led Zeppelin', 'Eagles', 'John Lennon', 'Oasis', 'Guns N Roses'][Math.floor(Math.random()*8)],
+            album: ['After Hours', 'Divide', 'A Night at the Opera', 'IV', 'Hotel California', 'Imagine', 'Morning Glory', 'Appetite'][Math.floor(Math.random()*8)],
+            ms: Math.floor(Math.random() * 300000) + 180000
+          });
+        }
+        dataByDate.spotify.set(iso, plays);
+      }
+      
+      // Location data (80% of days)
+      if(rand > 0.2) {
+        dataByDate.location.set(iso, {
+          places: [
+            { time: '07:30', name: 'Home', lat: 42.8897, lng: -85.6447 },
+            { time: '08:45', name: 'Coffee Shop', lat: 42.8912, lng: -85.6401 },
+            { time: '09:15', name: 'Work', lat: 42.8934, lng: -85.6392 },
+            { time: '12:30', name: 'Restaurant', lat: 42.8889, lng: -85.6378 },
+            { time: '13:00', name: 'Work', lat: 42.8934, lng: -85.6392 },
+            { time: '17:30', name: 'Gym', lat: 42.8856, lng: -85.6423 },
+            { time: '19:00', name: 'Home', lat: 42.8897, lng: -85.6447 }
+          ],
+          distance: Math.floor(Math.random() * 30) + 5
+        });
+      }
+      
+      // Plex data (30% of days)
+      if(rand > 0.7) {
+        const items = [];
+        const count = Math.floor(Math.random() * 3) + 1;
+        const movies = [
+          { title: 'Inception', type: 'Movie', runtime: 148 },
+          { title: 'The Dark Knight', type: 'Movie', runtime: 152 },
+          { title: 'The Office S03E12', type: 'TV', runtime: 22 },
+          { title: 'Breaking Bad S04E13', type: 'TV', runtime: 48 },
+          { title: 'Interstellar', type: 'Movie', runtime: 169 }
+        ];
+        for(let m = 0; m < count; m++) {
+          items.push(movies[Math.floor(Math.random() * movies.length)]);
+        }
+        dataByDate.plex.set(iso, items);
+      }
+      
+      // Photos (40% of days)
+      if(rand > 0.6) {
+        const count = Math.floor(Math.random() * 20) + 1;
+        dataByDate.photos.set(iso, { count });
+      }
+      
+      // Chat summaries (50% of days)
+      if(rand > 0.5) {
+        const summaries = [
+          { text: 'Discussed weekend plans with Sarah, mentioned going hiking on Sunday. Talked about the new restaurant downtown.', topics: ['plans', 'hiking', 'food'] },
+          { text: 'Work chat about Q4 deadlines. Need to finish the presentation by Friday.', topics: ['work', 'deadlines'] },
+          { text: 'Family group chat - organizing Thanksgiving dinner. Mom asked about dietary restrictions.', topics: ['family', 'holidays'] },
+          { text: 'Texted with Mike about basketball game tonight. Decided to meet at 7pm.', topics: ['sports', 'friends'] }
+        ];
+        dataByDate.chats.set(iso, summaries[Math.floor(Math.random() * summaries.length)]);
+      }
+    }
+  }
+
+  generateMockData();
+
+  // Check if a date has any data
+  function hasDataForDate(iso) {
+    return dataByDate.spotify.has(iso) || 
+           dataByDate.location.has(iso) || 
+           dataByDate.plex.has(iso) || 
+           dataByDate.photos.has(iso) || 
+           dataByDate.chats.has(iso);
+  }
+
+  function buildGrid(person){
+    const wrapper = document.createElement('div');
+    wrapper.className = 'person';
+    const label = document.createElement('h3');
+    label.textContent = person.name;
+    wrapper.appendChild(label);
+
+    const table = document.createElement('table');
+    const tbody = document.createElement('tbody');
+
+    let dayIndex = 0;
+    for(let y=0; y<100; y++){
+      const tr = document.createElement('tr');
+      for(let d=0; d<365; d++){
+        const td = document.createElement('td');
+        const date = new Date(person.dob.getTime() + dayIndex*oneDay);
+        const iso  = toISO(date);
+        const lived = date <= today;
+        td.className = lived ? 'lived' : 'left';
+        if (toISO(today) === iso) td.classList.add('today');
+
+        if (loadNote(person.key, iso)) td.classList.add('has-note');
+        if (hasDataForDate(iso) && person.key === 'me') td.classList.add('has-data');
+
+        td.dataset.person = person.key;
+        td.dataset.date = iso;
+        td.title = `${person.name} · ${date.toDateString()}`;
+        td.addEventListener('click', onCellClick);
+
+        tr.appendChild(td);
+        dayIndex++;
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+    return wrapper;
+  }
+
+  people.forEach(p => tablesContainer.appendChild(buildGrid(p)));
+
+  // ===== Drawer logic =====
+  const drawer   = document.getElementById('drawer');
+  const backdrop = document.getElementById('backdrop');
+  const cardTitle= document.getElementById('cardTitle');
+  const cardMeta = document.getElementById('cardMeta');
+  const drawerContent = document.getElementById('drawerContent');
+  const saveBtn  = document.getElementById('saveBtn');
+  const cancelBtn= document.getElementById('cancelBtn');
+  const deleteBtn= document.getElementById('deleteBtn');
+
+  let current = null; // { personKey, iso, cell }
+  let currentNoteData = { title: '', link: '', body: '' };
+
+  function openDrawer(){ drawer.classList.add('show'); backdrop.classList.add('show'); }
+  function closeDrawer(){ drawer.classList.remove('show'); backdrop.classList.remove('show'); current=null; }
+
+  function msToHMM(ms){
+    const s = Math.floor(ms/1000), m = Math.floor(s/60), h = Math.floor(m/60), mm = m%60;
+    return h ? `${h}h ${mm}m` : `${mm}m`;
+  }
+
+  function renderLocation(iso) {
+    const loc = dataByDate.location.get(iso);
+    if(!loc || !loc.places.length) return '';
+    
+    let html = '<div class="data-section"><h5><span class="icon">📍</span>Location</h5>';
+    html += `<div class="data-meta">${loc.places.length} location${loc.places.length>1?'s':''} · ${loc.distance} mi traveled</div>`;
+    html += '<div class="location-timeline">';
+    
+    for(let i = 0; i < loc.places.length; i++) {
+      const p = loc.places[i];
+      html += `<div class="location-item">
+        <span class="time">${p.time}</span>
+        <span class="place">${p.name}</span>
+        ${i < loc.places.length-1 ? '<span class="arrow">→</span>' : ''}
+      </div>`;
+    }
+    
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderSpotify(iso) {
+    const plays = dataByDate.spotify.get(iso);
+    if(!plays || !plays.length) return '';
+    
+    const totalMs = plays.reduce((a,b)=>a+(b.ms||0),0);
+    const topTracks = plays.slice(0, 10);
+    
+    let html = '<div class="data-section"><h5><span class="icon">🎵</span>Music</h5>';
+    html += `<div class="data-meta">${plays.length} play${plays.length>1?'s':''} · ${msToHMM(totalMs)} listened</div>`;
+    html += '<ul class="music-list">';
+    
+    for(const p of topTracks) {
+      html += `<li><div class="track">${p.track}</div><div class="artist">${p.artist}${p.album ? ` · ${p.album}` : ''}</div></li>`;
+    }
+    
+    if(plays.length > 10) {
+      html += `<li style="color:#6b7280;font-size:12px">+ ${plays.length-10} more tracks...</li>`;
+    }
+    
+    html += '</ul></div>';
+    return html;
+  }
+
+  function renderPlex(iso) {
+    const items = dataByDate.plex.get(iso);
+    if(!items || !items.length) return '';
+    
+    const totalMin = items.reduce((a,b)=>a+b.runtime,0);
+    
+    let html = '<div class="data-section"><h5><span class="icon">🎬</span>Watched</h5>';
+    html += `<div class="data-meta">${items.length} item${items.length>1?'s':''} · ${Math.floor(totalMin/60)}h ${totalMin%60}m</div>`;
+    html += '<div class="plex-list">';
+    
+    for(const item of items) {
+      const emoji = item.type === 'Movie' ? '🎬' : '📺';
+      html += `<div class="plex-item">
+        <div class="plex-poster">${emoji}</div>
+        <div class="plex-info">
+          <div class="plex-title">${item.title}</div>
+          <div class="plex-detail">${item.type} · ${item.runtime} min</div>
+        </div>
+      </div>`;
+    }
+    
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderPhotos(iso) {
+    const photos = dataByDate.photos.get(iso);
+    if(!photos || !photos.count) return '';
+    
+    let html = '<div class="data-section"><h5><span class="icon">📸</span>Photos</h5>';
+    html += `<div class="data-meta">${photos.count} photo${photos.count>1?'s':''} taken</div>`;
+    html += '<div class="photo-grid">';
+    
+    const emojis = ['🌅', '🍕', '🎉', '🏔️', '🌊', '🌸', '🐶', '☕', '🎂', '🌆', '🌴', '🎨', '🏖️', '🌺', '🦋', '🌻'];
+    const show = Math.min(photos.count, 8);
+    for(let i = 0; i < show; i++) {
+      html += `<div class="photo-thumb">${emojis[Math.floor(Math.random()*emojis.length)]}</div>`;
+    }
+    
+    if(photos.count > 8) {
+      html += `<div class="photo-thumb" style="font-size:12px;background:#f3f4f6;color:#6b7280">+${photos.count-8}</div>`;
+    }
+    
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderChats(iso) {
+    const chat = dataByDate.chats.get(iso);
+    if(!chat) return '';
+    
+    let html = '<div class="data-section"><h5><span class="icon">💬</span>Conversations</h5>';
+    html += `<div class="chat-summary">${chat.text}</div>`;
+    if(chat.topics && chat.topics.length) {
+      html += '<div class="chat-topics">';
+      for(const topic of chat.topics) {
+        html += `<span class="chat-topic">${topic}</span>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderNotes(iso, personKey) {
+    const note = loadNote(personKey, iso) || {};
+    currentNoteData = {
+      title: note.title || '',
+      link: note.link || '',
+      body: note.body || ''
+    };
+    
+    let html = '<div class="notes-section"><h5>✏️ Personal Notes</h5>';
+    html += '<label>Title</label>';
+    html += `<input type="text" id="noteTitle" placeholder="e.g., Anniversary dinner" value="${currentNoteData.title}">`;
+    html += '<label>Link</label>';
+    html += `<input type="url" id="noteLink" placeholder="https://..." value="${currentNoteData.link}">`;
+    html += '<label>Notes</label>';
+    html += `<textarea id="noteBody" placeholder="Write anything you want to remember...">${currentNoteData.body}</textarea>`;
+    html += '</div>';
+    return html;
+  }
+
+  function onCellClick(e){
+    const cell = e.currentTarget;
+    const personKey = cell.dataset.person;
+    const iso = cell.dataset.date;
+    current = { personKey, iso, cell };
+
+    const person = people.find(p => p.key===personKey);
+    const date = new Date(iso);
+    cardTitle.textContent = `${person.name} — ${date.toDateString()}`;
+    const lived = date <= today ? 'lived day' : 'future day';
+    cardMeta.textContent = lived;
+
+    // Render all sections
+    let html = '';
+    
+    // Only show activity data for 'me' (you can expand to others later)
+    if(personKey === 'me') {
+      html += renderLocation(iso);
+      html += renderSpotify(iso);
+      html += renderPlex(iso);
+      html += renderPhotos(iso);
+      html += renderChats(iso);
+    }
+    
+    // Always show notes section last
+    html += renderNotes(iso, personKey);
+    
+    drawerContent.innerHTML = html;
+    openDrawer();
+  }
+
+  saveBtn.addEventListener('click', () => {
+    if(!current) return;
+    const titleInput = document.getElementById('noteTitle');
+    const linkInput = document.getElementById('noteLink');
+    const bodyInput = document.getElementById('noteBody');
+    
+    const data = {
+      title: titleInput?.value.trim() || '',
+      link: linkInput?.value.trim() || '',
+      body: bodyInput?.value.trim() || '',
+      savedAt: new Date().toISOString()
+    };
+    
+    saveNote(current.personKey, current.iso, data);
+    current.cell.classList.add('has-note');
+    closeDrawer();
+  });
+
+  deleteBtn.addEventListener('click', () => {
+    if(!current) return;
+    deleteNoteLS(current.personKey, current.iso);
+    current.cell.classList.remove('has-note');
+    closeDrawer();
+  });
+
+  cancelBtn.addEventListener('click', closeDrawer);
+  backdrop.addEventListener('click', closeDrawer);
+
+  // Export/Import
+  document.getElementById('exportNotes').addEventListener('click', () => {
+    const notes = {};
+    for(let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if(key.startsWith('lifeNote:')) {
+        notes[key] = JSON.parse(localStorage.getItem(key));
+      }
+    }
+    const blob = new Blob([JSON.stringify(notes, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `life-notes-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+  });
+
+  document.getElementById('importNotes').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const notes = JSON.parse(ev.target.result);
+        for(const [key, val] of Object.entries(notes)) {
+          localStorage.setItem(key, JSON.stringify(val));
+        }
+        alert('Notes imported! Refresh to see changes.');
+      } catch(err) {
+        alert('Failed to import: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  });
+</script>
+</body>
+</html>
